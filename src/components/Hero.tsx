@@ -15,10 +15,15 @@ interface HeroProps {
 export default function Hero({ name, role, tagline, email, onNavigate }: HeroProps) {
   const assets = useAssetDetection();
   const [isPlaying, setIsPlaying] = useState(true);
-  const [isMuted, setIsMuted] = useState(true); // Default to muted for seamless, instant compatibility with browser autoplay criteria
+  
+  // 💡 VS CODE TIP: To make the video voice play out loud automatically by default in your local setup,
+  // change the initial state below from `true` to `false`.
+  // Note: Modern browsers (Chrome/Safari) block unmuted autoplay until the user clicks anywhere on the page first.
+  const [isMuted, setIsMuted] = useState(true); 
   const [isAutoplayBlocked, setIsAutoplayBlocked] = useState(false);
   const [videoLoaded, setVideoLoaded] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const hasInteractedRef = useRef(false);
 
   const [isSetupOpen, setIsSetupOpen] = useState(false);
   const [uploadStatus, setUploadStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
@@ -107,11 +112,16 @@ export default function Hero({ name, role, tagline, email, onNavigate }: HeroPro
         if (playPromise !== undefined) {
           playPromise.catch((err) => {
             console.log("Unmuted video autoplay restricted by browser policies. Falling back to muted playback.", err);
-            setIsAutoplayBlocked(true);
-            setIsMuted(true); // Sync state so unmute prompt shows
-            if (videoRef.current) {
-              videoRef.current.muted = true;
-              videoRef.current.play().catch(e => console.log("Muted autoplay fallback failed too:", e));
+            // ONLY fallback to auto-muted loop if user hasn't active-interacted with the layout yet
+            if (!hasInteractedRef.current) {
+              setIsAutoplayBlocked(true);
+              setIsMuted(true); // Sync state so unmute prompt shows
+              if (videoRef.current) {
+                videoRef.current.muted = true;
+                videoRef.current.play().catch(e => console.log("Muted autoplay fallback failed too:", e));
+              }
+            } else {
+              console.log("User has active engagement, bypassing programmatic muted fallback.");
             }
           });
         }
@@ -124,13 +134,19 @@ export default function Hero({ name, role, tagline, email, onNavigate }: HeroPro
   // Handle smart general interaction detection to auto-unmute and play background video
   useEffect(() => {
     const handleFirstGesture = () => {
+      // Set interaction status permanently
+      hasInteractedRef.current = true;
+      
       // Upon the very first user interaction with the page, try to unmute/activate audio for Gayatri's voiced video
       setIsMuted(false);
       setIsAutoplayBlocked(false);
 
       if (videoRef.current) {
         videoRef.current.muted = false;
-        videoRef.current.play().catch(() => {});
+        videoRef.current.volume = 1.0;
+        videoRef.current.play().catch((err) => {
+          console.log("Auto-unmute play gesture errored:", err);
+        });
       }
 
       cleanup();
@@ -154,6 +170,7 @@ export default function Hero({ name, role, tagline, email, onNavigate }: HeroPro
   };
 
   const toggleMute = () => {
+    hasInteractedRef.current = true;
     if (isMuted) {
       // Unmuting: reset video to start so they hear the greeting clearly
       if (videoRef.current) {
@@ -167,12 +184,14 @@ export default function Hero({ name, role, tagline, email, onNavigate }: HeroPro
   };
 
   const handleUnmuteAndRestart = () => {
+    hasInteractedRef.current = true;
     setIsMuted(false);
     setIsPlaying(true);
     setIsAutoplayBlocked(false);
 
     if (videoRef.current) {
       videoRef.current.muted = false;
+      videoRef.current.volume = 1.0;
       videoRef.current.currentTime = 0;
       videoRef.current.play().catch(err => {
         console.log("Manual play trigger error for video:", err);
@@ -546,3 +565,4 @@ export default function Hero({ name, role, tagline, email, onNavigate }: HeroPro
     </section>
   );
 }
+
